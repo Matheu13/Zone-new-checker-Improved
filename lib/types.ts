@@ -1,0 +1,26 @@
+export type Mode = "xtream" | "stalker" | "base64";
+export type RunMode = "single" | "bulk";
+export type Base64Operation = "decode" | "encode";
+
+export type CheckResult = {
+  ok: boolean;
+  error?: string;
+
+  expiryDate: string; // display-ready
+  expiryTs?: number; // unix ms for sorting (optional)
+  maxConnections: string; // display-ready
+  activeConnections?: string; // Xtream-only (display-ready)
+  realUrl: string;
+  port: string;
+  timezone: string;
+
+  // Protocol-specific extras
+  portalIp?: string;
+  channels?: string; // live/M3U channel count
+};
+
+export type BulkRowResult = {
+  lineNumber?: number;
+  input: string;
+  result: CheckResult;
+};
