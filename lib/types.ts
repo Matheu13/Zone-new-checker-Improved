@@ -17,6 +17,7 @@ export type CheckResult = {
   // Protocol-specific extras
   portalIp?: string;
   channels?: string; // live/M3U channel count
+  adultContent?: "Yes" | "No" | "Unknown";
 };
 
 export type BulkRowResult = {

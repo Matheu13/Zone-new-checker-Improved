@@ -12,7 +12,11 @@ export async function GET() {
     "";
 
   return NextResponse.json(
-    { siteKey },
+    {
+      siteKey,
+      localVerificationBypass:
+        process.env.NODE_ENV !== "production" && process.env.SKIP_HUMAN_VERIFICATION === "1",
+    },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

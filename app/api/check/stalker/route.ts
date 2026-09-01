@@ -5,6 +5,7 @@ import { lookup } from "dns/promises";
 import { createInMemoryRateLimiter, getClientIp, RATE_MAX_CHECK_PER_WINDOW, RATE_WINDOW_MS } from "@/lib/rateLimit";
 import { isHumanVerified } from "@/lib/humanVerification";
 import { assertSafePublicUrl } from "@/lib/networkSecurity";
+import { classifyAdultContent } from "@/lib/contentClassification";
 
 // This route uses Node-only APIs (dns/promises), so it must not run in the Edge runtime.
 export const runtime = "nodejs";
@@ -403,38 +404,55 @@ export async function POST(req: Request) {
 
     // Channels count (MacAttack uses type=itv&action=get_all_channels)
     let channels: string = "N/A";
-    try {
-      if (token && headersForFollowups && cookiesForFollowups) {
-        const cookieHeader = Object.entries(cookiesForFollowups)
-          .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-          .join("; ");
+    let adultContent = "Unknown" as "Yes" | "No" | "Unknown";
+    if (token && headersForFollowups && cookiesForFollowups) {
+      const cookieHeader = Object.entries(cookiesForFollowups)
+        .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+        .join("; ");
+      const followupHeaders = { ...headersForFollowups, Cookie: cookieHeader };
 
-        const tryUrls = [
+      const loadChannelCount = async (): Promise<string> => {
+        const urls = [
           `${portalBase}/portal.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml`,
           `${origin}/stalker_portal/server/load.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml`,
         ];
-
-        for (const u of tryUrls) {
-          const resAll = await fetchWithTimeout(u, {
-            headers: {
-              ...headersForFollowups,
-              Cookie: cookieHeader,
-            },
-            timeoutMs: 15000, publicOnly: true,
-          });
-
-          if (resAll.ok) {
-            const jAll = await safeJson(resAll);
-            const count = pickChannelCount(jAll);
-            if (count !== null) {
-              channels = count;
-              break;
+        try {
+          for (const u of urls) {
+            const response = await fetchWithTimeout(u, { headers: followupHeaders, timeoutMs: 8000, publicOnly: true });
+            if (response.ok) {
+              const count = pickChannelCount(await safeJson(response));
+              if (count !== null) return count;
             }
           }
+        } catch {
+          // Supplemental metadata must not invalidate a working account.
         }
-      }
-    } catch {
-      // ignore
+        return "N/A";
+      };
+
+      const loadAdultStatus = async (): Promise<"Yes" | "No" | "Unknown"> => {
+        const urls = [
+          `${portalBase}/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml`,
+          `${origin}/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml`,
+        ];
+        try {
+          for (const u of urls) {
+            const response = await fetchWithTimeout(u, { headers: followupHeaders, timeoutMs: 8000, publicOnly: true });
+            if (!response.ok) continue;
+            const genreList = asObj(await safeJson(response))["js"];
+            if (!Array.isArray(genreList)) continue;
+            return classifyAdultContent(genreList.map((item) => {
+              const genre = asObj(item);
+              return genre["title"] ?? genre["name"];
+            }));
+          }
+        } catch {
+          // Supplemental metadata must not invalidate a working account.
+        }
+        return "Unknown";
+      };
+
+      [channels, adultContent] = await Promise.all([loadChannelCount(), loadAdultStatus()]);
     }
 
     return NextResponse.json(
@@ -449,6 +467,7 @@ export async function POST(req: Request) {
         timezone,
         portalIp,
         channels,
+        adultContent,
       },
       { headers: NO_STORE_HEADERS }
     );

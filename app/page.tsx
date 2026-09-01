@@ -70,7 +70,7 @@ type StalkerSingleState = { url: string; mac: string };
 type XtreamBulkState = { lines: string };
 type StalkerBulkState = { url: string; macs: string };
 
-type BulkSortKey = "input" | "status" | "expiry" | "maxConnections" | "timezone" | "portalIp" | "channels";
+type BulkSortKey = "input" | "status" | "expiry" | "maxConnections" | "timezone" | "portalIp" | "channels" | "adultContent";
 type BulkSortDir = "asc" | "desc";
 type BulkSortState = { key: BulkSortKey; dir: BulkSortDir } | null;
 
@@ -182,6 +182,7 @@ export default function HomePage() {
   const embeddedSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   const [siteKey, setSiteKey] = useState(embeddedSiteKey);
   const [verificationConfigLoaded, setVerificationConfigLoaded] = useState(Boolean(embeddedSiteKey));
+  const [localVerificationBypass, setLocalVerificationBypass] = useState(false);
 
   function handleXtreamUrlChange(value: string) {
     try {
@@ -230,6 +231,7 @@ export default function HomePage() {
       .then((json: unknown) => {
         const obj = asObj(json);
         setSiteKey(typeof obj["siteKey"] === "string" ? String(obj["siteKey"]) : "");
+        setLocalVerificationBypass(obj["localVerificationBypass"] === true);
       })
       .catch(() => setSiteKey(""))
       .finally(() => setVerificationConfigLoaded(true));
@@ -237,6 +239,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!verificationConfigLoaded) return;
+    if (localVerificationBypass) {
+      setIsVerified(true);
+      setTurnstileError("");
+      return;
+    }
     if (!siteKey) {
       setIsVerified(false);
       setTurnstileError("Turnstile site key is not configured on this deployment.");
@@ -255,7 +262,7 @@ export default function HomePage() {
     };
 
     checkVerification();
-  }, [siteKey, verificationConfigLoaded]);
+  }, [siteKey, verificationConfigLoaded, localVerificationBypass]);
 
   // First-time user detection
   useEffect(() => {
@@ -477,6 +484,7 @@ export default function HomePage() {
           timezone: typeof o["timezone"] === "string" ? o["timezone"] : "",
           portalIp: typeof o["portalIp"] === "string" ? o["portalIp"] : undefined,
           channels: typeof o["channels"] === "string" ? o["channels"] : undefined,
+          adultContent: o["adultContent"] === "Yes" || o["adultContent"] === "No" || o["adultContent"] === "Unknown" ? o["adultContent"] : undefined,
         });
       }
 
@@ -504,6 +512,7 @@ export default function HomePage() {
               timezone: typeof r["timezone"] === "string" ? r["timezone"] : "",
               portalIp: typeof r["portalIp"] === "string" ? r["portalIp"] : undefined,
               channels: typeof r["channels"] === "string" ? r["channels"] : undefined,
+              adultContent: r["adultContent"] === "Yes" || r["adultContent"] === "No" || r["adultContent"] === "Unknown" ? r["adultContent"] : undefined,
             },
           });
         }
@@ -702,6 +711,11 @@ export default function HomePage() {
       } else if (bulkSortKey === "channels") {
         const at = parseIntSafe(a.result.channels);
         const bt = parseIntSafe(b.result.channels);
+        if (at !== bt) return (at - bt) * dir;
+      } else if (bulkSortKey === "adultContent") {
+        const rank = (value: unknown) => value === "Yes" ? 0 : value === "No" ? 1 : 2;
+        const at = rank(a.result.adultContent);
+        const bt = rank(b.result.adultContent);
         if (at !== bt) return (at - bt) * dir;
       }
 
@@ -1598,6 +1612,7 @@ export default function HomePage() {
           maxConnections: String(obj["maxConnections"] ?? "N/A"),
           activeConnections: String(obj["activeConnections"] ?? "N/A"),
           channels: String(obj["channels"] ?? "N/A"),
+          adultContent: obj["adultContent"] === "Yes" || obj["adultContent"] === "No" ? obj["adultContent"] : "Unknown",
           realUrl: String(obj["realUrl"] ?? "N/A"),
           port: String(obj["port"] ?? "N/A"),
           timezone: String(obj["timezone"] ?? "N/A"),
@@ -1628,6 +1643,7 @@ export default function HomePage() {
           timezone: String(obj["timezone"] ?? "N/A"),
           portalIp: String(obj["portalIp"] ?? "N/A"),
           channels: String(obj["channels"] ?? "N/A"),
+          adultContent: obj["adultContent"] === "Yes" || obj["adultContent"] === "No" ? obj["adultContent"] : "Unknown",
         });
 
         await loadStalkerGenres();
@@ -1749,6 +1765,7 @@ export default function HomePage() {
                   expiryTs: typeof jsonObj["expiryTs"] === "number" ? (jsonObj["expiryTs"] as number) : undefined,
                     maxConnections: String(jsonObj["maxConnections"] ?? "N/A"),
                     channels: String(jsonObj["channels"] ?? "N/A"),
+                    adultContent: jsonObj["adultContent"] === "Yes" || jsonObj["adultContent"] === "No" ? jsonObj["adultContent"] : "Unknown",
                     realUrl: String(jsonObj["realUrl"] ?? "N/A"),
                   port: String(jsonObj["port"] ?? "N/A"),
                   timezone: String(jsonObj["timezone"] ?? "N/A"),
@@ -1904,6 +1921,7 @@ export default function HomePage() {
                   timezone: String(jsonObj["timezone"] ?? "N/A"),
                   portalIp: String(jsonObj["portalIp"] ?? "N/A"),
                   channels: String(jsonObj["channels"] ?? "N/A"),
+                  adultContent: jsonObj["adultContent"] === "Yes" || jsonObj["adultContent"] === "No" ? jsonObj["adultContent"] : "Unknown",
                 },
               };
               return next;
@@ -2593,6 +2611,7 @@ export default function HomePage() {
           {mode === "xtream" ? <ResultKV label="MAX CONNECTIONS" value={singleResult.maxConnections} /> : null}
           {mode === "xtream" ? <ResultKV label="ACTIVE CONNECTIONS" value={singleResult.activeConnections || "N/A"} /> : null}
           <ResultKV label="CHANNELS" value={singleResult.channels || "N/A"} />
+          <ResultKV label="ADULT CONTENT" value={singleResult.adultContent || "Unknown"} />
           <ResultKV label="REAL URL" value={singleResult.realUrl} />
           <ResultKV label="PORT" value={singleResult.port} />
           <ResultKV label="TIMEZONE" value={singleResult.timezone} />
@@ -3025,6 +3044,11 @@ export default function HomePage() {
                       Channels <span className="thIcon">{sortIndicator("channels")}</span>
                     </button>
                   </th>
+                  <th>
+                    <button className="thBtn" type="button" disabled={busy} onClick={() => toggleBulkSort("adultContent")}>
+                      Adult content <span className="thIcon">{sortIndicator("adultContent")}</span>
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -3039,6 +3063,7 @@ export default function HomePage() {
                     <td>{r.result.timezone}</td>
                     {mode === "stalker" ? <td className="mono">{r.result.portalIp || "N/A"}</td> : null}
                     <td>{r.result.channels || "N/A"}</td>
+                    <td>{r.result.adultContent || "Unknown"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -3,6 +3,7 @@ import { readJsonBody, safeJson } from "@/lib/http";
 import { normalizeUrl, parsePortFromOrigin } from "@/lib/validation";
 import { createInMemoryRateLimiter, getClientIp, RATE_MAX_CHECK_PER_WINDOW, RATE_WINDOW_MS } from "@/lib/rateLimit";
 import { isHumanVerified } from "@/lib/humanVerification";
+import { classifyAdultContent } from "@/lib/contentClassification";
 
 export const maxDuration = 30;
 
@@ -157,8 +158,8 @@ export async function POST(req: Request) {
     // player API returns the same live-channel catalogue without downloading and
     // parsing the full M3U text. Keep this best-effort so an otherwise valid
     // account is still reported when an older panel does not support the action.
-    let channels = "N/A";
-    try {
+    const loadChannelCount = async (): Promise<string> => {
+      try {
       const channelsForm = new URLSearchParams({ username, password, action: "get_live_streams" });
       const channelsRes = await fetchXtreamApi(apiUrl, {
         method: "POST",
@@ -171,11 +172,42 @@ export async function POST(req: Request) {
       }, 8000);
       if (channelsRes.ok) {
         const channelsJson = await safeJson(channelsRes, 10_000_000);
-        if (Array.isArray(channelsJson)) channels = String(channelsJson.length);
+        if (Array.isArray(channelsJson)) return String(channelsJson.length);
       }
-    } catch {
-      // Channel count is supplemental; retain N/A if the catalogue is unavailable.
-    }
+      } catch {
+        // Supplemental metadata must not invalidate a working account.
+      }
+      return "N/A";
+    };
+
+    const loadAdultStatus = async () => {
+      try {
+        const categoriesForm = new URLSearchParams({ username, password, action: "get_live_categories" });
+        const categoriesRes = await fetchXtreamApi(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "IPTVChecker/1.0",
+            Accept: "application/json",
+          },
+          body: categoriesForm.toString(),
+        }, 8000);
+        if (categoriesRes.ok) {
+          const categoriesJson = await safeJson(categoriesRes, 2_000_000);
+          if (Array.isArray(categoriesJson)) {
+            return classifyAdultContent(categoriesJson.map((item) => {
+              const category = asObj(item);
+              return category["category_name"] ?? category["name"];
+            }));
+          }
+        }
+      } catch {
+        // Supplemental metadata must not invalidate a working account.
+      }
+      return "Unknown" as const;
+    };
+
+    const [channels, adultContent] = await Promise.all([loadChannelCount(), loadAdultStatus()]);
 
     const serverUrl = String(serverInfo["url"] ?? "").trim();
     const serverPort = String(serverInfo["port"] ?? "").trim();
@@ -192,6 +224,7 @@ export async function POST(req: Request) {
         maxConnections,
         activeConnections,
         channels,
+        adultContent,
         realUrl,
         port,
         timezone,
