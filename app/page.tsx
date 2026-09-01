@@ -204,6 +204,13 @@ export default function HomePage() {
         abortRef.current?.abort();
         setBusy(false);
         setPlaylistBusy(false);
+        setBulkResults((current) =>
+          current.map((row) =>
+            row.result.error === "Checking..."
+              ? { ...row, result: { ...row.result, error: "Human verification required." } }
+              : row
+          )
+        );
         // Instead of redirect, show inline verification
         setIsVerified(false);
         setTurnstileToken("");
@@ -2536,6 +2543,7 @@ export default function HomePage() {
                     onClick={runSingle}
                     disabled={
                       busy ||
+                      isVerified !== true ||
                       (mode === "xtream" ? xtreamSingleErrors.length > 0 : stalkerSingleErrors.length > 0)
                     }
                   >
@@ -2544,7 +2552,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <button className="btn primary" onClick={runBulk} disabled={busy || Boolean(bulkDisabledReason)}>
+                  <button className="btn primary" onClick={runBulk} disabled={busy || isVerified !== true || Boolean(bulkDisabledReason)}>
                     {busy ? "Checking..." : "Check (Bulk)"}
                   </button>
                   <button className="btn danger" onClick={stopBulk} disabled={!busy}>
