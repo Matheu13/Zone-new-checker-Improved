@@ -25,15 +25,21 @@ export default function VerifyClient() {
   const [token, setToken] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
+  const embeddedSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const [siteKey, setSiteKey] = useState(embeddedSiteKey);
+  const [configLoaded, setConfigLoaded] = useState(Boolean(embeddedSiteKey));
 
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-
-  // Auto-redirect if Turnstile is not configured (local development)
   useEffect(() => {
-    if (!siteKey) {
-      router.replace(returnTo);
-    }
-  }, [siteKey, router, returnTo]);
+    if (configLoaded) return;
+    fetch("/api/verification-config", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json: unknown) => {
+        const obj = typeof json === "object" && json !== null ? (json as Record<string, unknown>) : {};
+        setSiteKey(typeof obj["siteKey"] === "string" ? String(obj["siteKey"]) : "");
+      })
+      .catch(() => setSiteKey(""))
+      .finally(() => setConfigLoaded(true));
+  }, [configLoaded]);
 
   useEffect(() => {
     window.onTurnstileSuccess = (t: string) => {
@@ -107,8 +113,10 @@ export default function VerifyClient() {
               If you are blocked by your browser extensions, try disabling them for this site or open a fresh tab.
             </div>
 
-            {!siteKey ? (
-              <div className="verifyError">Server not configured.</div>
+            {!configLoaded ? (
+              <div className="subtitle">Loading verification…</div>
+            ) : !siteKey ? (
+              <div className="verifyError">Turnstile site key is not configured on this deployment.</div>
             ) : (
               <>
                 <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />

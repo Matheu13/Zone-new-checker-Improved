@@ -179,6 +179,9 @@ export default function HomePage() {
   const [turnstileToken, setTurnstileToken] = useState<string>("");
   const [turnstileError, setTurnstileError] = useState<string>("");
   const [verifying, setVerifying] = useState(false);
+  const embeddedSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const [siteKey, setSiteKey] = useState(embeddedSiteKey);
+  const [verificationConfigLoaded, setVerificationConfigLoaded] = useState(Boolean(embeddedSiteKey));
 
   function handleXtreamUrlChange(value: string) {
     try {
@@ -193,8 +196,6 @@ export default function HomePage() {
       setXtreamSingle((current) => ({ ...current, url: value }));
     }
   }
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-
   const canShowSingle = runMode === "single";
 
   const handleMaybeVerifyRequired = useCallback(
@@ -216,9 +217,22 @@ export default function HomePage() {
 
   // Check verification status on mount (proactive verification)
   useEffect(() => {
-    // Skip if no site key configured (local development)
+    if (verificationConfigLoaded) return;
+    fetch("/api/verification-config", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json: unknown) => {
+        const obj = asObj(json);
+        setSiteKey(typeof obj["siteKey"] === "string" ? String(obj["siteKey"]) : "");
+      })
+      .catch(() => setSiteKey(""))
+      .finally(() => setVerificationConfigLoaded(true));
+  }, [verificationConfigLoaded]);
+
+  useEffect(() => {
+    if (!verificationConfigLoaded) return;
     if (!siteKey) {
-      setIsVerified(true);
+      setIsVerified(false);
+      setTurnstileError("Turnstile site key is not configured on this deployment.");
       return;
     }
 
@@ -234,7 +248,7 @@ export default function HomePage() {
     };
 
     checkVerification();
-  }, [siteKey]);
+  }, [siteKey, verificationConfigLoaded]);
 
   // First-time user detection
   useEffect(() => {
@@ -2027,6 +2041,14 @@ export default function HomePage() {
             </div>
           </>
         )}
+        {isVerified === false && verificationConfigLoaded && !siteKey ? (
+          <div className="verifyBanner">
+            <div className="verifyBannerText">
+              <strong>Verification is not configured</strong>
+              <span>Add TURNSTILE_SITE_KEY (or NEXT_PUBLIC_TURNSTILE_SITE_KEY) to this deployment, then redeploy.</span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="checkerTop">
           <div className="checkerSelectors">
