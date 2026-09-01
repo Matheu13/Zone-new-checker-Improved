@@ -198,11 +198,11 @@ Steps to test the changes:
 
 ### API Testing
 
-For API changes, test with:
+For API changes, set `APP_ORIGIN` to the environment you are testing and run:
 
 ```bash
 # Example curl test
-curl -X POST http://localhost:3000/api/check/xtream \
+curl -X POST "$APP_ORIGIN/api/check/xtream" \
   -H "Content-Type: application/json" \
   -H "X-ZoneNew-Client: 1" \
   -d '{"url":"...","username":"...","password":"..."}'

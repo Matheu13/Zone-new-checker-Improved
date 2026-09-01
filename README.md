@@ -108,8 +108,6 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
-
 ---
 
 ## 📦 Installation
@@ -173,7 +171,6 @@ Open [http://localhost:3000](http://localhost:3000)
 # Using Docker Compose (recommended)
 docker compose up -d --build
 
-# Access at http://localhost:3000
 
 # Stop
 docker compose down
