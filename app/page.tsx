@@ -70,7 +70,7 @@ type StalkerSingleState = { url: string; mac: string };
 type XtreamBulkState = { lines: string };
 type StalkerBulkState = { url: string; macs: string };
 
-type BulkSortKey = "input" | "status" | "expiry" | "maxConnections" | "timezone" | "portalIp" | "channels" | "adultContent";
+type BulkSortKey = "input" | "status" | "expiry" | "maxConnections" | "activeConnections" | "timezone" | "portalIp" | "channels" | "adultContent";
 type BulkSortDir = "asc" | "desc";
 type BulkSortState = { key: BulkSortKey; dir: BulkSortDir } | null;
 
@@ -696,6 +696,10 @@ export default function HomePage() {
       } else if (bulkSortKey === "maxConnections") {
         const at = parseIntSafe(a.result.maxConnections);
         const bt = parseIntSafe(b.result.maxConnections);
+        if (at !== bt) return (at - bt) * dir;
+      } else if (bulkSortKey === "activeConnections") {
+        const at = parseIntSafe(a.result.activeConnections);
+        const bt = parseIntSafe(b.result.activeConnections);
         if (at !== bt) return (at - bt) * dir;
       } else if (bulkSortKey === "timezone") {
         const at = String(a.result.timezone || "").trim().toLowerCase();
@@ -1764,6 +1768,7 @@ export default function HomePage() {
                   expiryDate: String(jsonObj["expiryDate"] ?? "N/A"),
                   expiryTs: typeof jsonObj["expiryTs"] === "number" ? (jsonObj["expiryTs"] as number) : undefined,
                     maxConnections: String(jsonObj["maxConnections"] ?? "N/A"),
+                    activeConnections: String(jsonObj["activeConnections"] ?? "N/A"),
                     channels: String(jsonObj["channels"] ?? "N/A"),
                     adultContent: jsonObj["adultContent"] === "Yes" || jsonObj["adultContent"] === "No" ? jsonObj["adultContent"] : "Unknown",
                     realUrl: String(jsonObj["realUrl"] ?? "N/A"),
@@ -3027,6 +3032,13 @@ export default function HomePage() {
                       Max <span className="thIcon">{sortIndicator("maxConnections")}</span>
                     </button>
                   </th>
+                  {mode === "xtream" ? (
+                    <th>
+                      <button className="thBtn" type="button" disabled={busy} onClick={() => toggleBulkSort("activeConnections")}>
+                        Active <span className="thIcon">{sortIndicator("activeConnections")}</span>
+                      </button>
+                    </th>
+                  ) : null}
                   <th>
                     <button className="thBtn" type="button" disabled={busy} onClick={() => toggleBulkSort("timezone")}>
                       Timezone <span className="thIcon">{sortIndicator("timezone")}</span>
@@ -3060,6 +3072,7 @@ export default function HomePage() {
                     <td>{r.result.ok ? "OK" : r.result.error || "Failed"}</td>
                     <td>{r.result.expiryDate}</td>
                     <td>{r.result.maxConnections}</td>
+                    {mode === "xtream" ? <td>{r.result.activeConnections || "N/A"}</td> : null}
                     <td>{r.result.timezone}</td>
                     {mode === "stalker" ? <td className="mono">{r.result.portalIp || "N/A"}</td> : null}
                     <td>{r.result.channels || "N/A"}</td>
