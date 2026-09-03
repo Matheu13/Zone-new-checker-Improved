@@ -177,3 +177,11 @@ scripts/_local/
 temp/
 tmp/
 .vercel
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
